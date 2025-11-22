@@ -6,7 +6,6 @@ import { UserRole } from './entities/user-role.entity';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { AssignRoleDto } from './dto/assign-role.dto';
-import { KeycloakService } from '../keycloak/keycloak.service';
 
 @Injectable()
 export class RolesService {
@@ -15,7 +14,6 @@ export class RolesService {
     private roleRepository: Repository<Role>,
     @InjectRepository(UserRole)
     private userRoleRepository: Repository<UserRole>,
-    private keycloakService: KeycloakService,
   ) {}
 
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
@@ -28,13 +26,6 @@ export class RolesService {
     const role = this.roleRepository.create(createRoleDto);
     const savedRole = await this.roleRepository.save(role);
 
-    // Sync role to Keycloak
-    try {
-      await this.keycloakService.syncRoles([{ name: savedRole.name }]);
-    } catch (error) {
-      console.error('Failed to sync role to Keycloak:', error);
-      // Continue even if Keycloak sync fails
-    }
 
     return savedRole;
   }

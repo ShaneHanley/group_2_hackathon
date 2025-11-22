@@ -22,9 +22,6 @@ export class Role {
   @Column({ type: 'jsonb', nullable: true })
   permissions: string[];
 
-  @Column({ name: 'keycloak_role_id', nullable: true })
-  keycloakRoleId: string;
-
   @OneToMany(() => UserRole, (userRole) => userRole.role)
   userRoles: UserRole[];
 

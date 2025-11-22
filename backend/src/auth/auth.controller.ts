@@ -10,7 +10,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
@@ -73,6 +73,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @SkipThrottle() // Skip rate limiting for authenticated endpoints
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
@@ -87,11 +88,13 @@ export class AuthController {
   }
 
   @Get('userinfo')
+  @SkipThrottle() // Skip rate limiting for authenticated endpoints
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user info' })
   @ApiResponse({ status: 200, description: 'User info retrieved' })
   async getUserInfo(@Request() req) {
+    // User object from JWT strategy already has fresh roles from database
     const user = req.user;
     return {
       id: user.id,
@@ -99,7 +102,7 @@ export class AuthController {
       displayName: user.displayName,
       department: user.department,
       status: user.status,
-      roles: user.csis_roles || [], // Include roles for debugging
+      roles: user.csis_roles || [], // Fresh roles from database (via JWT strategy)
     };
   }
 

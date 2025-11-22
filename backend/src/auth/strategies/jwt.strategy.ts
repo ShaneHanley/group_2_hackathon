@@ -18,14 +18,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    const user = await this.authService.validateUser(payload.sub);
-    if (!user) {
+    // Fetch user with fresh roles from database
+    const result = await this.authService.getUserWithRoles(payload.sub);
+    if (!result) {
       throw new UnauthorizedException();
     }
-    // Include roles from JWT payload in the user object
+    
+    const { user, roles } = result;
+    
+    // Use roles from database (always fresh) instead of JWT payload
+    // This ensures roles are up-to-date even if token was issued before role assignment
     return {
       ...user,
-      csis_roles: payload.csis_roles || [],
+      csis_roles: roles,
     };
   }
 }

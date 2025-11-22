@@ -42,9 +42,6 @@ export class User {
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any>;
 
-  @Column({ name: 'keycloak_id', nullable: true })
-  keycloakId: string;
-
   @OneToMany(() => UserRole, (userRole) => userRole.user)
   userRoles: UserRole[];
 

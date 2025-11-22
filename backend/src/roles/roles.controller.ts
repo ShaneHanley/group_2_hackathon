@@ -10,6 +10,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { RolesService } from './roles.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -20,6 +21,7 @@ import { Roles } from './decorators/roles.decorator';
 
 @ApiTags('roles')
 @Controller('roles')
+@SkipThrottle() // Skip rate limiting for authenticated role endpoints
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class RolesController {

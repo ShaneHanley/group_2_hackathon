@@ -10,6 +10,11 @@ import { AdminModule } from './admin/admin.module';
 import { OauthModule } from './oauth/oauth.module';
 import { AuditModule } from './audit/audit.module';
 import { DatabaseModule } from './database/database.module';
+import { HealthModule } from './health/health.module';
+import { LoggerModule } from './common/logger/logger.module';
+import { EmailModule } from './email/email.module';
+import { RedisModule } from './redis/redis.module';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -28,6 +33,10 @@ import { DatabaseModule } from './database/database.module';
       ],
     }),
     DatabaseModule,
+    LoggerModule,
+    EmailModule,
+    RedisModule,
+    HealthModule,
     AuthModule,
     UsersModule,
     RolesModule,
@@ -35,6 +44,7 @@ import { DatabaseModule } from './database/database.module';
     OauthModule,
     AuditModule,
   ],
+  controllers: [AppController],
   providers: [
     {
       provide: APP_GUARD,

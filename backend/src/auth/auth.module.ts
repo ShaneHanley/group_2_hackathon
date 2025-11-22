@@ -9,14 +9,14 @@ import { User } from '../users/entities/user.entity';
 import { TokenBlacklist } from './entities/token-blacklist.entity';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { EmailVerificationToken } from './entities/email-verification-token.entity';
+import { FailedLoginAttempt } from './entities/failed-login-attempt.entity';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { KeycloakModule } from '../keycloak/keycloak.module';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, TokenBlacklist, PasswordResetToken, EmailVerificationToken]),
+    TypeOrmModule.forFeature([User, TokenBlacklist, PasswordResetToken, EmailVerificationToken, FailedLoginAttempt]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -28,7 +28,6 @@ import { AuditModule } from '../audit/audit.module';
       }),
       inject: [ConfigService],
     }),
-    KeycloakModule,
     AuditModule,
   ],
   controllers: [AuthController],

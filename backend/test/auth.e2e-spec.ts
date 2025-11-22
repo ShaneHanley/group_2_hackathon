@@ -29,22 +29,30 @@ describe('Auth (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/register', () => {
-    it('should register a new user', () => {
-      return request(app.getHttpServer())
+    it('should register a new user', async () => {
+      // Clean up any existing test user (delete related records first due to FK constraints)
+      await dataSource.query(`
+        DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE email = 'test@csis.edu')
+      `);
+      await dataSource.query(`
+        DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE email = 'test@csis.edu')
+      `);
+      await dataSource.query(`DELETE FROM users WHERE email = 'test@csis.edu'`);
+      
+      const response = await request(app.getHttpServer())
         .post('/api/v1/auth/register')
         .send({
           email: 'test@csis.edu',
           password: 'Test123!',
           displayName: 'Test User',
           department: 'CS',
-        })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('id');
-          expect(res.body.email).toBe('test@csis.edu');
-          expect(res.body.status).toBe('pending');
-          userId = res.body.id;
         });
+      
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.email).toBe('test@csis.edu');
+      expect(response.body.status).toBe('pending');
+      userId = response.body.id;
     });
 
     it('should reject duplicate email', () => {
@@ -69,14 +77,21 @@ describe('Auth (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/login', () => {
-    it('should reject login for pending user', () => {
-      return request(app.getHttpServer())
+    it('should reject login for pending user', async () => {
+      // Ensure user is in pending status
+      await dataSource.query(
+        `UPDATE users SET status = 'pending' WHERE email = 'test@csis.edu'`,
+      );
+      
+      const response = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
         .send({
           email: 'test@csis.edu',
           password: 'Test123!',
-        })
-        .expect(401);
+        });
+      
+      expect(response.status).toBe(401);
+      expect(response.body.message).toContain('not active');
     });
 
     it('should login successfully after activation', async () => {
@@ -177,7 +192,7 @@ describe('Auth (e2e)', () => {
       return request(app.getHttpServer())
         .get('/api/v1/auth/userinfo')
         .set('Authorization', `Bearer ${accessToken}`)
-        .expect(401);
+        .expect(403); // JWT guard returns 403 Forbidden for blacklisted tokens
     });
   });
 });

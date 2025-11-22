@@ -8,7 +8,6 @@ import { AuthService } from './auth.service';
 import { User } from '../users/entities/user.entity';
 import { TokenBlacklist } from './entities/token-blacklist.entity';
 import { UserStatus } from '../users/entities/user.entity';
-import { KeycloakService } from '../keycloak/keycloak.service';
 import { AuditService } from '../audit/audit.service';
 
 describe('AuthService', () => {
@@ -39,10 +38,6 @@ describe('AuthService', () => {
     log: jest.fn(),
   };
 
-  const mockKeycloakService = {
-    createUser: jest.fn(),
-  };
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -62,10 +57,6 @@ describe('AuthService', () => {
         {
           provide: AuditService,
           useValue: mockAuditService,
-        },
-        {
-          provide: KeycloakService,
-          useValue: mockKeycloakService,
         },
       ],
     }).compile();
@@ -101,7 +92,6 @@ describe('AuthService', () => {
         email: 'test@csis.edu',
         status: UserStatus.PENDING,
       });
-      mockKeycloakService.createUser.mockResolvedValue({ id: 'keycloak-id' });
       mockAuditService.log.mockResolvedValue({});
 
       const result = await service.register(createUserDto);

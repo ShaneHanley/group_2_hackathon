@@ -5,7 +5,6 @@ import { UsersModule } from '../users/users.module';
 import { RolesModule } from '../roles/roles.module';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
-import { KeycloakModule } from '../keycloak/keycloak.module';
 
 @Module({
   imports: [
@@ -13,7 +12,6 @@ import { KeycloakModule } from '../keycloak/keycloak.module';
     RolesModule,
     AuditModule,
     AuthModule, // Import AuthModule to make AuthService available for JwtAuthGuard
-    KeycloakModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

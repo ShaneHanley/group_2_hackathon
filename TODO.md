@@ -12,7 +12,7 @@
 - [x] Swagger/OpenAPI documentation
 - [x] Integration SDK (Node.js)
 - [x] Docker Compose setup
-- [x] Keycloak container setup
+- [x] ~~Keycloak container setup~~ (REMOVED - using custom IAM implementation)
 - [x] Token Refresh Endpoint
 - [x] Logout Endpoint with token blacklist
 - [x] Complete password reset flow
@@ -21,7 +21,7 @@
 - [x] Role CRUD operations (Create, Read, Update, Delete)
 - [x] User activation workflow with enhanced UX
 - [x] Frontend error handling, loading states, and form validation
-- [x] Keycloak integration - sync users and roles
+- [x] ~~Keycloak integration - sync users and roles~~ (REMOVED - using custom IAM implementation)
 - [x] OAuth2/OIDC endpoints (token, userinfo, JWKS, discovery)
 - [x] Rate limiting middleware
 
@@ -69,27 +69,25 @@
 - [x] Log verification token for demo (can be extended to send email)
 - [x] Added `GET /auth/verify-email/:token` endpoint
 - [x] Update user status to active after verification
-- [x] Sync user activation to Keycloak
+- [x] ~~Sync user activation to Keycloak~~ (REMOVED - using custom IAM implementation)
 - [x] Rate limiting (3 per hour for resend)
 
-### 5. Keycloak Integration
-**Status:** ✅ IMPLEMENTED
-**Location:** `backend/src/keycloak/keycloak.service.ts`, `backend/src/keycloak/keycloak-admin.service.ts`
-**What was done:**
-- [x] Implemented Keycloak Admin API calls for user creation
-- [x] Sync roles between Keycloak and PostgreSQL
-- [x] Automatic role creation in Keycloak when roles are created
-- [x] Automatic role assignment sync to Keycloak
-- [x] User status sync (enabled/disabled) to Keycloak
-- [x] Graceful fallback if Keycloak is unavailable
+### 5. ~~Keycloak Integration~~ (REMOVED)
+**Status:** ✅ REMOVED - Replaced with custom IAM implementation
+**Note:** Keycloak has been completely removed. The system now uses a custom OAuth2/OIDC implementation with:
+- Custom token endpoint (`/oauth/token`)
+- JWT signing with RSA keypairs
+- JWKS endpoint for public key distribution
+- Token introspection
+- All functionality implemented in-house
 
 ### 6. OAuth2/OIDC Endpoints
 **Status:** ✅ IMPLEMENTED
 **Location:** `backend/src/oauth/oauth.controller.ts`, `backend/src/oauth/oauth.service.ts`
 **What was done:**
-- [x] Complete `POST /oauth/token` endpoint (delegates to Keycloak)
+- [x] Complete `POST /oauth/token` endpoint (custom implementation)
 - [x] Complete `GET /oauth/userinfo` endpoint (OIDC compliant)
-- [x] Added `GET /.well-known/jwks.json` for public key (fetches from Keycloak)
+- [x] Added `GET /.well-known/jwks.json` for public key (generates RSA keypair)
 - [x] Added `GET /.well-known/openid-configuration` for OIDC discovery
 - [x] Implemented token introspection (RFC 7662 compliant with fallback)
 
@@ -205,7 +203,7 @@
 9. ✅ Complete OAuth2 token endpoint (DONE)
 10. ✅ Email verification (DONE)
 11. ✅ Rate limiting (DONE)
-12. ✅ Keycloak integration (DONE)
+12. ✅ ~~Keycloak integration~~ (REMOVED - replaced with custom implementation)
 
 ### Nice to Have (If Time Permits):
 13. Redis caching (for rate limiting and session cache)
@@ -223,7 +221,7 @@
 5. ✅ **Better Frontend Error Handling** - Show proper error messages (DONE)
 6. ✅ **Email Verification** - Token-based email verification flow (DONE)
 7. ✅ **Rate Limiting** - Protect endpoints from abuse (DONE)
-8. ✅ **Keycloak Sync** - Automatic user and role synchronization (DONE)
+8. ✅ ~~**Keycloak Sync**~~ (REMOVED - using custom IAM implementation)
 9. ✅ **OAuth2/OIDC** - Complete OAuth2 and OpenID Connect endpoints (DONE)
 
 ## 🔧 Implementation Order Recommendation
@@ -235,7 +233,7 @@
 5. ✅ **Frontend Improvements** (1-2 hours) - Better UX (DONE)
 6. ✅ **Rate Limiting** (1 hour) - Security (DONE)
 7. ✅ **Email Verification** (1-2 hours) - User onboarding (DONE)
-8. ✅ **Keycloak Integration** (2-3 hours) - Identity provider sync (DONE)
+8. ✅ **Custom OAuth2/OIDC Implementation** (DONE) - Replaced Keycloak with custom implementation
 9. ✅ **OAuth2/OIDC Endpoints** (2-3 hours) - Integration endpoints (DONE)
 10. **Testing** (2-3 hours) - Quality assurance (structure exists)
 11. **Redis Integration** (1-2 hours) - Enhanced caching and rate limiting
@@ -244,7 +242,7 @@
 ## 📚 Resources
 
 - NestJS Documentation: https://docs.nestjs.com
-- Keycloak Admin API: https://www.keycloak.org/docs-api/latest/rest-api/
+- Custom OAuth2/OIDC implementation (no external dependencies)
 - OAuth2/OIDC: https://oauth.net/2/
 - JWT Best Practices: https://datatracker.ietf.org/doc/html/rfc8725
 

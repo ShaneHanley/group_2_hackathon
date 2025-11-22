@@ -8,7 +8,8 @@ import {
   Delete,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -18,6 +19,7 @@ import { Roles } from '../roles/decorators/roles.decorator';
 
 @ApiTags('users')
 @Controller('users')
+@SkipThrottle() // Skip rate limiting for authenticated user endpoints
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UsersController {
@@ -57,7 +59,10 @@ export class UsersController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiOperation({ summary: 'Delete user (admin only)' })
-  remove(@Param('id') id: string) {
+  @ApiResponse({ status: 200, description: 'User deleted successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  async remove(@Param('id') id: string) {
     return this.usersService.remove(id);
   }
 }

@@ -1,16 +1,20 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule as NestJwtModule } from '@nestjs/jwt';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { OauthController, WellKnownController } from './oauth.controller';
 import { OauthService } from './oauth.service';
-import { KeycloakModule } from '../keycloak/keycloak.module';
 import { AuthModule } from '../auth/auth.module';
+import { JwtModule } from '../jwt/jwt.module';
+import { User } from '../users/entities/user.entity';
+import { TokenBlacklist } from '../auth/entities/token-blacklist.entity';
 
 @Module({
   imports: [
-    KeycloakModule,
+    TypeOrmModule.forFeature([User, TokenBlacklist]),
+    JwtModule,
     AuthModule,
-    JwtModule.registerAsync({
+    NestJwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get('JWT_SECRET', 'your-secret-key'),

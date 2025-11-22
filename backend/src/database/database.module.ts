@@ -8,22 +8,29 @@ import { AuditLog } from '../audit/entities/audit-log.entity';
 import { TokenBlacklist } from '../auth/entities/token-blacklist.entity';
 import { PasswordResetToken } from '../auth/entities/password-reset-token.entity';
 import { EmailVerificationToken } from '../auth/entities/email-verification-token.entity';
+import { FailedLoginAttempt } from '../auth/entities/failed-login-attempt.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get('DB_HOST', 'localhost'),
-        port: configService.get('DB_PORT', 5432),
-        username: configService.get('DB_USERNAME', 'keycloak'),
-        password: configService.get('DB_PASSWORD', 'keycloak'),
-        database: configService.get('DB_DATABASE', 'keycloak'),
-        entities: [User, Role, UserRole, AuditLog, TokenBlacklist, PasswordResetToken, EmailVerificationToken],
-        synchronize: configService.get('NODE_ENV') === 'development',
-        logging: configService.get('NODE_ENV') === 'development',
-      }),
+      useFactory: (configService: ConfigService) => {
+        const nodeEnv = configService.get('NODE_ENV', 'development');
+        return {
+          type: 'postgres',
+          host: configService.get('DB_HOST', 'localhost'),
+          port: configService.get('DB_PORT', 5433),
+          username: configService.get('DB_USERNAME', 'iam'),
+          password: configService.get('DB_PASSWORD', 'iam'),
+          database: configService.get('DB_DATABASE', 'iam'),
+          entities: [User, Role, UserRole, AuditLog, TokenBlacklist, PasswordResetToken, EmailVerificationToken, FailedLoginAttempt],
+          synchronize: nodeEnv === 'development', // Disabled in production - use migrations
+          logging: configService.get('NODE_ENV') === 'development',
+          retryAttempts: 10,
+          retryDelay: 3000,
+          autoLoadEntities: true,
+        };
+      },
       inject: [ConfigService],
     }),
   ],

@@ -3,16 +3,23 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserStatus } from './entities/user.entity';
+import { UserRole } from '../roles/entities/user-role.entity';
+import { EmailVerificationToken } from '../auth/entities/email-verification-token.entity';
+import { PasswordResetToken } from '../auth/entities/password-reset-token.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { KeycloakService } from '../keycloak/keycloak.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    private keycloakService: KeycloakService,
+    @InjectRepository(UserRole)
+    private userRoleRepository: Repository<UserRole>,
+    @InjectRepository(EmailVerificationToken)
+    private emailVerificationTokenRepository: Repository<EmailVerificationToken>,
+    @InjectRepository(PasswordResetToken)
+    private passwordResetTokenRepository: Repository<PasswordResetToken>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -86,24 +93,35 @@ export class UsersService {
     if (updateUserDto.status !== undefined) {
       user.status = updateUserDto.status;
       
-      // Sync status to Keycloak
-      if (user.keycloakId) {
-        try {
-          await this.keycloakService.updateUser(user.keycloakId, {
-            enabled: updateUserDto.status === UserStatus.ACTIVE,
-          });
-        } catch (error) {
-          console.error('Failed to sync user status to Keycloak:', error);
-        }
-      }
     }
     
     return this.userRepository.save(user);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<{ message: string }> {
     const user = await this.findOne(id);
-    await this.userRepository.remove(user);
+    
+    try {
+      // Delete related records first to avoid foreign key constraint violations
+      // Delete user roles
+      await this.userRoleRepository.delete({ userId: id });
+      
+      // Delete email verification tokens
+      await this.emailVerificationTokenRepository.delete({ userId: id });
+      
+      // Delete password reset tokens
+      await this.passwordResetTokenRepository.delete({ userId: id });
+      
+      // Note: Audit logs are kept for historical purposes (no FK constraint)
+      // Note: FailedLoginAttempt uses email, not userId, so no FK constraint
+      
+      // Finally, delete the user
+      await this.userRepository.remove(user);
+      
+      return { message: `User ${user.email} has been deleted successfully` };
+    } catch (error) {
+      throw new BadRequestException(`Failed to delete user: ${error.message}`);
+    }
   }
 }
 

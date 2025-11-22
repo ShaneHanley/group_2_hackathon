@@ -23,11 +23,19 @@ describe('Roles (e2e)', () => {
     dataSource = moduleFixture.get<DataSource>(DataSource);
     await app.init();
 
-    // Create admin user and get token
+    // Create admin user with proper password hash
+    const bcrypt = require('bcrypt');
+    const passwordHash = await bcrypt.hash('Test123!', 10);
+    
+    // Delete existing test user first (delete user_roles first due to FK constraint)
+    await dataSource.query(`
+      DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE email = 'admin-test@csis.edu')
+    `);
+    await dataSource.query(`DELETE FROM users WHERE email = 'admin-test@csis.edu'`);
+    
     await dataSource.query(`
       INSERT INTO users (id, email, password_hash, display_name, status, created_at, updated_at)
-      VALUES (gen_random_uuid(), 'admin-test@csis.edu', '$2b$10$rOzJqZqZqZqZqZqZqZqZqOZqZqZqZqZqZqZqZqZqZqZqZqZqZqZq', 'Admin Test', 'active', NOW(), NOW())
-      ON CONFLICT DO NOTHING
+      VALUES (gen_random_uuid(), 'admin-test@csis.edu', '${passwordHash}', 'Admin Test', 'active', NOW(), NOW())
     `);
 
     const user = await dataSource.query(
@@ -37,18 +45,22 @@ describe('Roles (e2e)', () => {
 
     // Create admin role and assign it
     await dataSource.query(`
-      INSERT INTO roles (id, name, created_at, updated_at)
-      VALUES (gen_random_uuid(), 'admin', NOW(), NOW())
+      INSERT INTO roles (id, name, department_scope, permissions, created_at, updated_at)
+      VALUES (gen_random_uuid(), 'admin', NULL, '["manage_users", "manage_roles", "view_audit", "manage_system"]'::jsonb, NOW(), NOW())
       ON CONFLICT DO NOTHING
     `);
 
     const role = await dataSource.query(`SELECT id FROM roles WHERE name = 'admin'`);
     const adminRoleId = role[0].id;
 
+    // Delete existing user role first
     await dataSource.query(`
-      INSERT INTO user_roles (id, user_id, role_id, granted_at)
-      VALUES (gen_random_uuid(), '${adminUserId}', '${adminRoleId}', NOW())
-      ON CONFLICT DO NOTHING
+      DELETE FROM user_roles WHERE user_id = '${adminUserId}' AND role_id = '${adminRoleId}'
+    `);
+    
+    await dataSource.query(`
+      INSERT INTO user_roles (id, user_id, role_id, granted_by, granted_at)
+      VALUES (gen_random_uuid(), '${adminUserId}', '${adminRoleId}', '${adminUserId}', NOW())
     `);
 
     // Login to get token
@@ -59,8 +71,11 @@ describe('Roles (e2e)', () => {
         password: 'Test123!',
       });
 
-    // Note: In real scenario, you'd need to set the password hash properly
-    // For now, we'll create a token manually or use a test helper
+    if (loginResponse.status === 200) {
+      adminToken = loginResponse.body.accessToken;
+    } else {
+      throw new Error(`Failed to login admin user: ${loginResponse.status} - ${JSON.stringify(loginResponse.body)}`);
+    }
   });
 
   afterAll(async () => {
@@ -80,20 +95,23 @@ describe('Roles (e2e)', () => {
   });
 
   describe('POST /api/v1/roles', () => {
-    it('should create a new role (admin only)', () => {
-      return request(app.getHttpServer())
+    it('should create a new role (admin only)', async () => {
+      // Clean up any existing test role
+      await dataSource.query(`DELETE FROM user_roles WHERE role_id IN (SELECT id FROM roles WHERE name = 'test_role')`);
+      await dataSource.query(`DELETE FROM roles WHERE name = 'test_role'`);
+      
+      const response = await request(app.getHttpServer())
         .post('/api/v1/roles')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           name: 'test_role',
           permissions: ['test_permission'],
-        })
-        .expect(201)
-        .expect((res) => {
-          expect(res.body).toHaveProperty('id');
-          expect(res.body.name).toBe('test_role');
-          roleId = res.body.id;
         });
+      
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('id');
+      expect(response.body.name).toBe('test_role');
+      roleId = response.body.id;
     });
   });
 });

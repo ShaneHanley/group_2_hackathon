@@ -8,11 +8,12 @@ import { User } from '../users/entities/user.entity';
 import { UserStatus } from '../users/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
-import { KeycloakService } from '../keycloak/keycloak.service';
 import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
 import { TokenBlacklist } from './entities/token-blacklist.entity';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
 import { EmailVerificationToken } from './entities/email-verification-token.entity';
+import { FailedLoginAttempt } from './entities/failed-login-attempt.entity';
 
 @Injectable()
 export class AuthService {
@@ -25,9 +26,11 @@ export class AuthService {
     private passwordResetTokenRepository: Repository<PasswordResetToken>,
     @InjectRepository(EmailVerificationToken)
     private emailVerificationTokenRepository: Repository<EmailVerificationToken>,
+    @InjectRepository(FailedLoginAttempt)
+    private failedLoginAttemptRepository: Repository<FailedLoginAttempt>,
     private jwtService: JwtService,
-    private keycloakService: KeycloakService,
     private auditService: AuditService,
+    private emailService: EmailService,
   ) {}
 
   async register(createUserDto: CreateUserDto, ipAddress?: string): Promise<User> {
@@ -68,37 +71,10 @@ export class AuthService {
 
     await this.emailVerificationTokenRepository.save(emailVerificationToken);
 
-    // Create user in Keycloak
-    try {
-      const keycloakUser = await this.keycloakService.createUser({
-        email: createUserDto.email,
-        username: createUserDto.email,
-        firstName: createUserDto.displayName.split(' ')[0],
-        lastName: createUserDto.displayName.split(' ').slice(1).join(' ') || '',
-        enabled: false, // Disabled until email is verified
-        emailVerified: false,
-        credentials: [
-          {
-            type: 'password',
-            value: createUserDto.password,
-            temporary: false,
-          },
-        ],
-      });
-
-      savedUser.keycloakId = keycloakUser.id;
-      await this.userRepository.save(savedUser);
-    } catch (error) {
-      console.error('Failed to create Keycloak user:', error);
-      // Continue even if Keycloak creation fails (for demo purposes)
-    }
-
-    // In production, send verification email
-    // For demo: log the verification token to console
-    console.log(`\n📧 Email Verification Token for ${createUserDto.email}:`);
-    console.log(`Token: ${verificationToken}`);
-    console.log(`Verification URL: http://localhost:5173/verify-email?token=${verificationToken}`);
-    console.log(`Expires at: ${expiresAt.toISOString()}\n`);
+    // Send verification email
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
+    await this.emailService.sendEmailVerificationEmail(createUserDto.email, verificationToken, verificationUrl);
 
     // Audit log
     await this.auditService.log({
@@ -126,17 +102,70 @@ export class AuthService {
       throw new UnauthorizedException('Account is not active');
     }
 
+    // Check for account lockout
+    const maxAttempts = 5;
+    const lockoutDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+    let failedAttempt = await this.failedLoginAttemptRepository.findOne({
+      where: { email: loginDto.email },
+    });
+
+    if (failedAttempt && failedAttempt.lockedUntil) {
+      const now = new Date();
+      if (now < failedAttempt.lockedUntil) {
+        const minutesRemaining = Math.ceil((failedAttempt.lockedUntil.getTime() - now.getTime()) / 60000);
+        throw new UnauthorizedException(`Account is locked. Please try again in ${minutesRemaining} minute(s).`);
+      } else {
+        // Lockout expired, reset attempts
+        failedAttempt.attemptCount = 0;
+        failedAttempt.lockedUntil = null;
+        await this.failedLoginAttemptRepository.save(failedAttempt);
+      }
+    }
+
     // Verify password
     const isPasswordValid = await bcrypt.compare(loginDto.password, user.passwordHash);
     if (!isPasswordValid) {
+      // Increment failed attempt count
+      if (!failedAttempt) {
+        failedAttempt = this.failedLoginAttemptRepository.create({
+          email: loginDto.email,
+          ipAddress,
+          attemptCount: 1,
+        });
+      } else {
+        failedAttempt.attemptCount += 1;
+      }
+
+      // Lock account after max attempts
+      if (failedAttempt.attemptCount >= maxAttempts) {
+        failedAttempt.lockedUntil = new Date(Date.now() + lockoutDuration);
+      }
+
+      await this.failedLoginAttemptRepository.save(failedAttempt);
+
       await this.auditService.log({
         action: 'login_failed',
         resourceType: 'user',
         resourceId: user.id,
-        details: { reason: 'invalid_password' },
+        details: { 
+          reason: 'invalid_password',
+          attemptCount: failedAttempt.attemptCount,
+          locked: failedAttempt.attemptCount >= maxAttempts,
+        },
         ipAddress,
       });
+
+      if (failedAttempt.attemptCount >= maxAttempts) {
+        throw new UnauthorizedException(`Account locked due to ${maxAttempts} failed login attempts. Please try again in 15 minutes.`);
+      }
+
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Successful login - clear failed attempts
+    if (failedAttempt) {
+      await this.failedLoginAttemptRepository.remove(failedAttempt);
     }
 
     // Get roles
@@ -191,6 +220,20 @@ export class AuthService {
     }
 
     return user;
+  }
+
+  async getUserWithRoles(userId: string): Promise<{ user: User; roles: string[] } | null> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+
+    if (!user || user.status !== UserStatus.ACTIVE) {
+      return null;
+    }
+
+    const roles = user.userRoles?.map((ur) => ur.role.name) || [];
+    return { user, roles };
   }
 
   async refreshToken(refreshToken: string, ipAddress?: string): Promise<{ accessToken: string; refreshToken: string }> {
@@ -360,12 +403,10 @@ export class AuthService {
       ipAddress,
     });
 
-    // In production, send email with reset link
-    // For demo: log the token to console
-    console.log(`\n🔐 Password Reset Token for ${email}:`);
-    console.log(`Token: ${token}`);
-    console.log(`Reset URL: http://localhost:5173/reset-password?token=${token}`);
-    console.log(`Expires at: ${expiresAt.toISOString()}\n`);
+    // Send password reset email
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+    await this.emailService.sendPasswordResetEmail(user.email, token, resetUrl);
 
     return {
       message: 'If an account with that email exists, a password reset link has been sent.',
@@ -470,18 +511,6 @@ export class AuthService {
     user.status = UserStatus.ACTIVE;
     await this.userRepository.save(user);
 
-    // Update user in Keycloak (enable and mark email as verified)
-    if (user.keycloakId) {
-      try {
-        await this.keycloakService.updateUser(user.keycloakId, {
-          enabled: true,
-          emailVerified: true,
-        });
-      } catch (error) {
-        console.error('Failed to update Keycloak user after email verification:', error);
-      }
-    }
-
     // Mark token as used
     verificationToken.used = true;
     await this.emailVerificationTokenRepository.save(verificationToken);
@@ -491,6 +520,9 @@ export class AuthService {
       userId: user.id,
       used: false,
     });
+
+    // Send welcome email
+    await this.emailService.sendWelcomeEmail(user.email, user.displayName);
 
     // Audit log
     await this.auditService.log({
@@ -540,12 +572,10 @@ export class AuthService {
 
     await this.emailVerificationTokenRepository.save(emailVerificationToken);
 
-    // In production, send verification email
-    // For demo: log the verification token to console
-    console.log(`\n📧 Resent Email Verification Token for ${email}:`);
-    console.log(`Token: ${verificationToken}`);
-    console.log(`Verification URL: http://localhost:5173/verify-email?token=${verificationToken}`);
-    console.log(`Expires at: ${expiresAt.toISOString()}\n`);
+    // Send verification email
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`;
+    await this.emailService.sendEmailVerificationEmail(email, verificationToken, verificationUrl);
 
     // Audit log
     await this.auditService.log({

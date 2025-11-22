@@ -4,7 +4,7 @@ A centralized IAM service for CSIS department systems, providing authentication,
 
 ## Features
 
-- ✅ OAuth2/OpenID Connect support via Keycloak
+- ✅ OAuth2/OpenID Connect support (custom implementation)
 - ✅ User registration, login, and password reset
 - ✅ Role-Based Access Control (RBAC)
 - ✅ Admin dashboard for user/role management
@@ -22,19 +22,12 @@ A centralized IAM service for CSIS department systems, providing authentication,
 
 ### Setup
 
-1. **Start Keycloak and PostgreSQL:**
+1. **Start PostgreSQL:**
    ```bash
    docker compose up -d
    ```
 
-2. **Configure Keycloak:**
-   - Access http://localhost:8080/admin
-   - Login: `admin` / `admin`
-   - Create realm: `CSIS`
-   - Create roles: `admin`, `staff`, `student`, `developer`
-   - Create OAuth client: `csis-iam-api` (Client Authentication: On)
-
-3. **Install dependencies:**
+2. **Install dependencies:**
    ```bash
    npm run setup
    ```
@@ -42,7 +35,7 @@ A centralized IAM service for CSIS department systems, providing authentication,
 4. **Configure environment:**
    ```bash
    cp backend/.env.example backend/.env
-   # Edit backend/.env with your Keycloak settings
+   # Edit backend/.env with your database and JWT settings
    ```
 
 5. **Run database migrations:**
@@ -73,7 +66,6 @@ Once running, access:
 - API: http://localhost:3000
 - Swagger UI: http://localhost:3000/api
 - Admin UI: http://localhost:5173
-- Keycloak: http://localhost:8080
 
 ## Integration Guide
 
